@@ -8,6 +8,8 @@
 #include "socket.h"
 #include<arpa/inet.h>
 #include <errno.h>
+#include"parser.h"
+#include"serve_file.h"
 
 
 
@@ -22,13 +24,6 @@ int main() {
 
     char buffer[4096];
 
-    // 把响应字符串定义在这里，避免每次循环重新构造
-    const char *response = 
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: text/plain\r\n"
-        "Content-Length: 13\r\n"
-        "\r\n"
-        "Hello, World!";
 
     while (1) {
         struct sockaddr_in client_addr;
@@ -63,8 +58,35 @@ int main() {
         printf("[INFO] %s - \"%s\"\n",
                inet_ntoa(client_addr.sin_addr),
                first_line);
+
+}
+    //解析请求行
+
+    char *method=NULL;
+    char *path=NULL;
+    char *version=NULL;
+
+    //复制一份，解析函数会修改原始数据
+    char parse_buf[4096];
+    strncpy(parse_buf,buffer,sizeof(parse_buf)-1);
+    parse_buf[sizeof(parse_buf)-1]='\0';
+    if(parse_request_line(parse_buf,&method,&path,&version)==0){
+        printf("[PARSED]method=%s,path=%s,version=%s\n",method,path,version);
+    }else{
+        printf("[PARSED] Failed to parse request line\n");
+        //解析失败，直接关闭连接，跳过发送
+        close(client_fd);
+        continue;
     }
-            // ===== 新增：发送HTTP响应 =====
+    
+    //根据路径选择响应内容
+    char response[4096];
+    int serve_result = serve_static_file(path, response, sizeof(response));
+    if (serve_result != 0) {
+        // serve_static_file 已经构造好了错误响应（404/403/500），直接发送
+        printf("File serve returned error code: %d\n", serve_result);
+    }
+            // ===== 发送HTTP响应 =====
             ssize_t sent_bytes = send(client_fd, response, strlen(response), 0);
             if (sent_bytes < 0) {
                 perror("send");
@@ -74,8 +96,8 @@ int main() {
             } else {
                 printf("Response sent successfully (%zd bytes)\n", sent_bytes);
             }
-            // ===== 新增结束 =====
-
+            // ===============
+        
         } else if (n == 0) {
             printf("Client closed the connection without sending data.\n");
         } else {
