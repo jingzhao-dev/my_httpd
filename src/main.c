@@ -42,7 +42,7 @@ int main() {
                ntohs(client_addr.sin_port));
 
         ssize_t n = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-        if (n > 0) {
+        if (n > 0){
             buffer[n] = '\0';
             printf("========== HTTP Request (raw) ==========\n");
     printf("%s", buffer);
@@ -59,7 +59,7 @@ int main() {
                inet_ntoa(client_addr.sin_addr),
                first_line);
 
-}
+    }
     //解析请求行
 
     char *method=NULL;
