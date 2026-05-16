@@ -49,6 +49,8 @@ static const mime_map_t mime_map[]={
     return mime_map[sizeof(mime_map)/sizeof(mime_map[0])-1].mime_type;
      }
 
+
+     
 int serve_static_file(const char* path,char *response_buf,size_t buf_size){
 //======安全检测：防止路径穿越======
 if(strstr(path,"..")!=NULL){

@@ -10,6 +10,7 @@
 #include <errno.h>
 #include"parser.h"
 #include"serve_file.h"
+#include"cgi.h"
 
 
 
@@ -51,7 +52,6 @@ int main() {
     // 结构化日志输出（依赖 \0）
     char log_buffer[4096];
     strncpy(log_buffer, buffer, sizeof(log_buffer) - 1);
-    log_buffer[sizeof(log_buffer) - 1] = '\0';
 
     char *first_line = strtok(log_buffer, "\r\n");
     if (first_line) {
@@ -81,11 +81,23 @@ int main() {
     
     //根据路径选择响应内容
     char response[4096];
-    int serve_result = serve_static_file(path, response, sizeof(response));
-    if (serve_result != 0) {
+    if(strncmp(path,"/cgi-bin/",9)==0){
+        //CGI请求->调用CGI处理器
+        const char *script=path+1;
+        if(handle_cgi(script,method,response,sizeof(response))!=0){
+            printf("CGI returnd error\n");
+        }
+    }else{
+        //静态文件请求->调用静态文件服务
+        int serve_result = serve_static_file(path, response, sizeof(response));
+            if (serve_result != 0) {
         // serve_static_file 已经构造好了错误响应（404/403/500），直接发送
         printf("File serve returned error code: %d\n", serve_result);
+      }
+
     }
+    
+
             // ===== 发送HTTP响应 =====
             ssize_t sent_bytes = send(client_fd, response, strlen(response), 0);
             if (sent_bytes < 0) {
