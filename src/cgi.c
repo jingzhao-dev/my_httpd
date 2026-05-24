@@ -4,30 +4,40 @@
 #include<string.h>
 #include<unistd.h>
 #include<sys/wait.h>
+#include "dynbuf.h"
 
-int handle_cgi(const char *script_path,const char *method,char *response_buf,size_t buf_size){
+//===============新函数==================
+DynBuf *handle_cgi_buf(const char *script_path, const char *method){
+    DynBuf *response_buf=dbuf_create();
+    if(!response_buf)   return NULL;
+
     int pipefd[2];
     if(pipe(pipefd)==-1){
-        snprintf(response_buf, buf_size,
-         "HTTP/1.1 500 Internal Server Error\r\n"
-                 "Content-Type: text/plain\r\n"
-                 "Content-Length: 25\r\n"
-                 "\r\n"
-                 "500 CGI Pipe Error");
-                 return -1;
+        if(dbuf_append(response_buf,"HTTP/1.1 500 Internal Server Error\r\n",strlen("HTTP/1.1 500 Internal Server Error\r\n"))==-1) goto fail;
+        if(dbuf_append(response_buf,"Content-Type: text/plain\r\n",strlen("Content-Type: text/plain\r\n"))==-1)  goto fail;
+        char content_length_buf[64];
+        const char *body_buf="500 CGI Pipe Error";
+        int content_length_len=snprintf(content_length_buf,sizeof(content_length_buf),"Content-Length: %zu\r\n",strlen(body_buf));
+        if(dbuf_append(response_buf,content_length_buf,content_length_len)==-1)  goto fail;
+        if(dbuf_append(response_buf,"\r\n",2)==-1) goto fail;
+        if(dbuf_append(response_buf,body_buf,strlen(body_buf))==-1)  goto fail;
+        return response_buf;
     }
 
     pid_t pid=fork();
     if(pid==-1){
         close(pipefd[0]);
         close(pipefd[1]);
-        snprintf(response_buf,buf_size,
-        "HTTP/1.1 500 Internal Server Error\r\n"
-                 "Content-Type: text/plain\r\n"
-                 "Content-Length: 25\r\n"
-                 "\r\n"
-                 "500 CGI Fork Error");
-                 return -1;
+        if(dbuf_append(response_buf,"HTTP/1.1 500 Internal Server Error\r\n",strlen("HTTP/1.1 500 Internal Server Error\r\n"))==-1) goto fail;
+        if(dbuf_append(response_buf,"Content-Type: text/plain\r\n",strlen("Content-Type: text/plain\r\n"))==-1)  goto fail;
+        char content_length_buf[64];
+        const char *body_buf="500 CGI Fork Error";
+        int content_length_len=snprintf(content_length_buf,sizeof(content_length_buf),"Content-Length: %zu\r\n",strlen(body_buf));
+        if(dbuf_append(response_buf,content_length_buf,content_length_len)==-1)  goto fail;
+        if(dbuf_append(response_buf,"\r\n",2)==-1) goto fail;
+        if(dbuf_append(response_buf,body_buf,strlen(body_buf))==-1)  goto fail;
+       
+        return response_buf;
     }
 
     if(pid==0){
@@ -44,36 +54,54 @@ int handle_cgi(const char *script_path,const char *method,char *response_buf,siz
         execl(script_path,script_path,NULL);
 
         //如果execl返回，说明执行失败
- printf("Content-Type: text/plain\r\n\r\n");
+        printf("Content-Type: text/plain\r\n\r\n");
         printf("Error: Cannot execute CGI script\n");
         exit(1);    
     }else{
         //父进程：读取子进程的输出
         close(pipefd[1]);   //关闭写端，父进程只读
 
-        char cgi_output[4096];
-        ssize_t total=0;
+
+        DynBuf *cgi_body=dbuf_create();
+        if(!cgi_body)  return NULL;
+        char read_buf[4096];
         ssize_t n;
-        while((n=read(pipefd[0],cgi_output+total,sizeof(cgi_output)-total-1))>0){
-          total+=n;
+        while((n=read(pipefd[0],read_buf,sizeof(read_buf)))>0){
+          if(dbuf_append(cgi_body,read_buf,n)==-1){
+            dbuf_free(cgi_body);
+            dbuf_free(response_buf);
+            close(pipefd[0]);
+
+            //等待子进程结束
+            waitpid(pid,NULL,0);
+
+            return NULL;
+          }
         }
-        cgi_output[total]='\0';
         close(pipefd[0]);
 
         //等待子进程结束
         waitpid(pid,NULL,0);
 
         //构造HTTP响应
-        snprintf(response_buf,buf_size,
-        "HTTP/1.1 200 OK\r\n"
-                 "Content-Type: text/plain\r\n"
-                 "Content-Length: %zd\r\n"
-                 "\r\n"
-                 "%s",
-                total,cgi_output);
 
+        if(dbuf_append(response_buf,"HTTP/1.1 200 OK\r\n",strlen("HTTP/1.1 200 OK\r\n"))==-1) goto fail;
+        if(dbuf_append(response_buf,"Content-Type: text/plain\r\n",strlen("Content-Type: text/plain\r\n"))==-1)  goto fail;
+        char content_length_buf[64];
+        int content_length_len=snprintf(content_length_buf,sizeof(content_length_buf),"Content-Length: %zu\r\n",dbuf_len(cgi_body));
+        if(dbuf_append(response_buf,content_length_buf,content_length_len)==-1)  goto fail;
+        if(dbuf_append(response_buf,"\r\n",2)==-1) goto fail;
+        if(dbuf_append(response_buf,dbuf_data(cgi_body),dbuf_len(cgi_body))==-1)  goto fail;
+       
+        dbuf_free(cgi_body);
+        return response_buf;
+       
 
-                return 0;
+    fail:
+    dbuf_free(cgi_body);
+    dbuf_free(response_buf);
+
+    return NULL;
 
     }
 }

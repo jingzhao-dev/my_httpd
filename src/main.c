@@ -11,6 +11,7 @@
 #include"parser.h"
 #include"serve_file.h"
 #include"cgi.h"
+#include "dynbuf.h"
 
 
 
@@ -80,35 +81,41 @@ int main() {
     }
     
     //根据路径选择响应内容
-    char response[4096];
+DynBuf *resp=NULL;
     if(strncmp(path,"/cgi-bin/",9)==0){
         //CGI请求->调用CGI处理器
         const char *script=path+1;
-        if(handle_cgi(script,method,response,sizeof(response))!=0){
-            printf("CGI returnd error\n");
-        }
+        resp=handle_cgi_buf(script,method);
     }else{
         //静态文件请求->调用静态文件服务
-        int serve_result = serve_static_file(path, response, sizeof(response));
-            if (serve_result != 0) {
-        // serve_static_file 已经构造好了错误响应（404/403/500），直接发送
-        printf("File serve returned error code: %d\n", serve_result);
-      }
-
+       resp = serve_static_file_buf(path);
+    
     }
     
 
             // ===== 发送HTTP响应 =====
-            ssize_t sent_bytes = send(client_fd, response, strlen(response), 0);
-            if (sent_bytes < 0) {
-                perror("send");
-            } else if (sent_bytes < (ssize_t)strlen(response)) {
-                // send可能只发送了一部分（少见，但理论存在）
-                printf("Warning: Only sent %zd of %zu bytes\n", sent_bytes, strlen(response));
-            } else {
+
+
+    if(resp==NULL){
+                 // 内存严重不足，发送最简单的 500 响应
+                    const char *err = "HTTP/1.1 500 Internal Server Error\r\n"
+                                      "Content-Type: text/plain\r\n"
+                                      "Content-Length: 0\r\n"
+                                      "\r\n";
+                    send(client_fd, err, strlen(err), 0);
+                    printf("[ERROR] Out of memory, sent fallback 500\n");
+            }else{
+                ssize_t sent_bytes = send(client_fd, dbuf_data(resp), dbuf_len(resp), 0);
+                if (sent_bytes < 0) {
+                    perror("send");
+                } else {
                 printf("Response sent successfully (%zd bytes)\n", sent_bytes);
+                }
+
+                dbuf_free(resp);
+                
             }
-            // ===============
+            
         
         } else if (n == 0) {
             printf("Client closed the connection without sending data.\n");
