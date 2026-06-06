@@ -4,27 +4,9 @@
 #include<stdlib.h>
 #include<strings.h> 
 #include"dynbuf.h"
-//MIME映射表
-typedef struct{
-    const char* extension;
-    const char* mime_type;
-}mime_map_t;
+#include"hashmap.h"
 
-static const mime_map_t mime_map[]={
-    {".html", "text/html"},
-    {".htm",  "text/html"},
-    {".css",  "text/css"},
-    {".js",   "application/javascript"},
-    {".png",  "image/png"},
-    {".jpg",  "image/jpeg"},
-    {".jpeg", "image/jpeg"},
-    {".gif",  "image/gif"},
-    {".svg",  "image/svg+xml"},
-    {".ico",  "image/x-icon"},
-    {".txt",  "text/plain"},
-    {".json", "application/json"},
-    {NULL,    "application/octet-stream"}  // 默认兜底
-};
+static HashMap *mime_map=NULL;
 
 /**
  * 根据文件名（路径）返回对应的MIME类型
@@ -32,22 +14,34 @@ static const mime_map_t mime_map[]={
  */
 
  static const char* get_mime_type(const char* path){
+    if(!mime_map){
+        mime_map=hashmap_create_with_capacity(31);
+        hashmap_put(mime_map,".html", "text/html");
+        hashmap_put(mime_map,".htm",  "text/html");
+        hashmap_put(mime_map,".css",  "text/css");
+        hashmap_put(mime_map,".js",   "application/javascript");
+        hashmap_put(mime_map,".png",  "image/png");
+        hashmap_put(mime_map,".jpg",  "image/jpeg");
+        hashmap_put(mime_map,".jpeg", "image/jpeg");
+        hashmap_put(mime_map,".gif",  "image/gif");
+        hashmap_put(mime_map,".svg",  "image/svg+xml");
+        hashmap_put(mime_map,".ico",  "image/x-icon");
+        hashmap_put(mime_map,".txt",  "text/plain");
+        hashmap_put(mime_map,".json", "application/json");
+    }
     //找到最后一个'.'的位置
     const char* dot=strrchr(path,'.');
     if(!dot){
         //没有拓展名，返回默认类型
         return "application/octet-stream";
     }
-
-    //遍历映射表
-    for(int i=0;mime_map[i].extension!=NULL;i++){
-        if(strcasecmp(dot,mime_map[i].extension)==0){//strcasecmp(dot, ...)：忽略大小写的字符串比较
-            return mime_map[i].mime_type;
-        }
+    const char *mime_type=hashmap_get(mime_map,dot);
+    if(mime_type){
+        return mime_type;
+    }else{
+        return "application/octet-stream";
     }
-    //没找到匹配的，返回兜底类型
-    return mime_map[sizeof(mime_map)/sizeof(mime_map[0])-1].mime_type;
-     }
+}
 
 
 

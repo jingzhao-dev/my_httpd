@@ -6,11 +6,12 @@ OBJS = $(SRCS:.c=.o)
 
 # 新增：dynbuf 的编译产物路径
 DYNBUF_OBJ = /home/zhaojing/clib/src/dynbuf.o
+HASHMAP_OBJ = /home/zhaojing/clib/src/hashmap.o
 
 all: $(TARGET)
 
 # 依赖里加上 $(DYNBUF_OBJ)
-$(TARGET): $(OBJS) $(DYNBUF_OBJ)
+$(TARGET): $(OBJS) $(DYNBUF_OBJ) $(HASHMAP_OBJ)
 	$(CC) $(CFLAGS) -o $@ $^
 
 %.o: %.c
