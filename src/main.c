@@ -18,7 +18,7 @@
 int main() {
     signal(SIGPIPE, SIG_IGN);
 
-    int server_fd = create_server_socket(8080);
+    int server_fd = create_server_socket(8080);//创建服务端socket
     if (server_fd < 0) {
         fprintf(stderr, "Failed to create server socket\n");
         return 1;
@@ -33,7 +33,7 @@ int main() {
 
         printf("Waiting for a client to connect...\n");
 
-        int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
+        int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);//accept  并创建客户端socket文件描述符
         if (client_fd < 0) {
             perror("accept");
             continue;
@@ -41,9 +41,9 @@ int main() {
 
         printf("--- New client connected from %s:%d ---\n",
                inet_ntoa(client_addr.sin_addr),
-               ntohs(client_addr.sin_port));
+               ntohs(client_addr.sin_port));//大端转小端
 
-        ssize_t n = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+        ssize_t n = recv(client_fd, buffer, sizeof(buffer) - 1, 0);//recv
         if (n > 0){
             buffer[n] = '\0';
             printf("========== HTTP Request (raw) ==========\n");
